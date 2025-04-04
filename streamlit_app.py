@@ -20,13 +20,13 @@ with st.form("prediction_form"):
         last_order_days = st.number_input("Days Since Last Order", min_value=0, max_value=365, value=45)
 
     submitted = st.form_submit_button("Predict")
-    
-    if st.button("Send balloons to celebrate the best team ever!"):
-        st.balloons()
 
     if submitted:
         st.success("✅ Prediction: Customer **left** the service.")
         st.info("Probability: 85.2% (mock data)")
+
+if st.button("Send balloons to celebrate the best team ever!"):
+    st.balloons()
 
 st.markdown("---")
 st.header("📊 Dashboard Analytics")
