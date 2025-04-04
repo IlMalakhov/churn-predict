@@ -40,7 +40,8 @@ col1, col2 = st.columns(2)
 
 with col1:
     churn_pie = df["Churned"].value_counts().reset_index()
-    fig = px.pie(churn_pie, values="Churned", names="index", title="Churn Distribution")
+    churn_pie.columns = ["Churned", "Count"]
+    fig = px.pie(churn_pie, values="Count", names="Churned", title="Churn Distribution")
     st.plotly_chart(fig, use_container_width=True)
 
 with col2:
