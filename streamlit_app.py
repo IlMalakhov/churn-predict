@@ -7,6 +7,7 @@ import joblib
 
 st.set_page_config(page_title="Customer Churn Demo", layout="wide")
 
+# Model loading
 @st.cache_resource
 def load_model():
     return joblib.load("churn_model.pkl")
@@ -18,6 +19,7 @@ except FileNotFoundError:
 
 st.title("🔍 Customer Churn Predictor Demo")
 
+# Form
 st.header("🧾 Prediction Form")
 
 with st.form("prediction_form"):
@@ -40,6 +42,8 @@ if st.button("Send balloons to celebrate the best team ever!"):
     st.balloons()
 
 st.markdown("---")
+
+# Dashboards
 st.header("📊 Dashboard Analytics")
 
 np.random.seed(42)
@@ -50,10 +54,15 @@ df = pd.DataFrame({
     "Revenue": np.random.normal(100, 20, 100),
 })
 
+# Power BI
 embed_url = "https://app.powerbi.com/reportEmbed?reportId=5d5e6245-c983-496c-b458-c06d2f1113f3&autoAuth=true&ctid=dfe014b9-885d-4e4a-8eb4-597464b165c5"
 
-components.iframe(embed_url, width=1400, height=800)
+col1 = st.column(1)
 
+with col1:
+    components.iframe(embed_url, width=1400, height=800)
+
+# Native Dashboards
 col1, col2 = st.columns(2)
 
 with col1:
