@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import joblib
+import time
 
 st.set_page_config(page_title="Customer Churn Demo", layout="wide")
 
@@ -11,6 +12,7 @@ st.set_page_config(page_title="Customer Churn Demo", layout="wide")
 @st.cache_resource
 def load_model():
     return joblib.load("churn_model.pkl")
+
 try:
     model = load_model()
     st.toast("Model loaded")
@@ -18,6 +20,23 @@ except FileNotFoundError:
     st.toast("Model file not found")
 
 st.title("🔍 Customer Churn Predictor Demo")
+
+# Demo stuff
+def smooth_progress_bar(bar, steps=5, total_time=4):
+    increments = np.linspace(0, 100, steps + 1)[1:]
+    delays = np.linspace(0.2, total_time / steps, steps)
+    for pct, delay in zip(increments, delays):
+        time.sleep(delay + np.random.uniform(0.1, 0.3))
+        bar.progress(int(pct))
+
+def make_mock_prediction():
+    will_leave = np.random.rand() > 0.5
+    probability = round(np.random.uniform(60, 99), 2)
+    result_text = (
+        "❌ Customer **will leave** the service." if will_leave
+        else "✅ Customer **will stay** with the service."
+    )
+    return result_text, probability
 
 # Form
 st.header("🧾 Prediction Form")
@@ -35,8 +54,13 @@ with st.form("prediction_form"):
     submitted = st.form_submit_button("Predict")
 
     if submitted:
-        st.success("✅ Prediction: Customer **left** the service.")
-        st.info("Probability: 85.2% (mock data)")
+        with st.spinner("Making prediction..."):
+            bar = st.progress(0)
+            smooth_progress_bar(bar, steps=5, total_time=4)
+
+            result, prob = make_mock_prediction()
+            st.success(result)
+            st.info(f"Predicted probability: {prob}%")
 
 if st.button("Send balloons to celebrate the best team ever!"):
     st.balloons()
@@ -46,7 +70,6 @@ st.markdown("---")
 # Dashboards
 st.header("📊 Dashboard Analytics")
 
-np.random.seed(42)
 df = pd.DataFrame({
     "Region": np.random.choice(["North", "South", "East", "West"], size=100),
     "Orders": np.random.poisson(10, 100),
