@@ -3,6 +3,13 @@ import streamlit.components.v1 as components
 import pandas as pd
 import numpy as np
 import plotly.express as px
+import joblib
+
+@st.cache_resource
+def load_model():
+    return joblib.load("churn_model.pkl")
+    
+    model = load_model()
 
 st.set_page_config(page_title="Customer Churn Demo", layout="wide")
 
