@@ -42,7 +42,7 @@ df = pd.DataFrame({
 
 embed_url = "https://app.powerbi.com/reportEmbed?reportId=5d5e6245-c983-496c-b458-c06d2f1113f3&autoAuth=true&ctid=dfe014b9-885d-4e4a-8eb4-597464b165c5"
 
-components.iframe(embed_url, width=1000, height=600)
+components.iframe(embed_url, width=1200, height=800)
 
 col1, col2 = st.columns(2)
 
