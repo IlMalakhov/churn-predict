@@ -13,9 +13,9 @@ def load_model():
     return joblib.load("churn_model.pkl")
 try:
     model = load_model()
-    st.caption("Model loaded")
+    st.toast("Model loaded")
 except FileNotFoundError:
-    st.caption("Model file not found")
+    st.toast("Model file not found")
 
 st.title("🔍 Customer Churn Predictor Demo")
 
