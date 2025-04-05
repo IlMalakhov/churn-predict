@@ -9,7 +9,7 @@ import joblib
 def load_model():
     return joblib.load("churn_model.pkl")
     
-    model = load_model()
+model = load_model()
 
 st.set_page_config(page_title="Customer Churn Demo", layout="wide")
 
