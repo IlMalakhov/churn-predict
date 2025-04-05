@@ -8,8 +8,11 @@ import joblib
 @st.cache_resource
 def load_model():
     return joblib.load("churn_model.pkl")
-    
-model = load_model()
+try:
+    model = load_model()
+    st.caption("Model loaded")
+except FileNotFoundError:
+    st.caption("Model file not found")
 
 st.set_page_config(page_title="Customer Churn Demo", layout="wide")
 
