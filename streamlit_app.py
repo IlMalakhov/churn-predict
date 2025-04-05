@@ -60,7 +60,7 @@ with st.form("prediction_form"):
 
             result, prob = make_mock_prediction()
             st.success(result)
-            st.info(f"Predicted probability: {prob}%")
+            st.info(f"Predicted probability: **{prob}%**")
 
 if st.button("Send balloons to celebrate the best team ever!"):
     st.balloons()
