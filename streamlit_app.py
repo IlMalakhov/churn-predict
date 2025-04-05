@@ -5,6 +5,8 @@ import numpy as np
 import plotly.express as px
 import joblib
 
+st.set_page_config(page_title="Customer Churn Demo", layout="wide")
+
 @st.cache_resource
 def load_model():
     return joblib.load("churn_model.pkl")
@@ -13,8 +15,6 @@ try:
     st.caption("Model loaded")
 except FileNotFoundError:
     st.caption("Model file not found")
-
-st.set_page_config(page_title="Customer Churn Demo", layout="wide")
 
 st.title("🔍 Customer Churn Predictor Demo")
 
