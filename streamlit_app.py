@@ -57,7 +57,7 @@ df = pd.DataFrame({
 # Power BI
 embed_url = "https://app.powerbi.com/reportEmbed?reportId=5d5e6245-c983-496c-b458-c06d2f1113f3&autoAuth=true&ctid=dfe014b9-885d-4e4a-8eb4-597464b165c5"
 
-col1 = st.column(1)
+col1 = st.columns(1)
 
 with col1:
     components.iframe(embed_url, width=1400, height=800)
