@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import numpy as np
 import plotly.express as px
@@ -38,6 +39,10 @@ df = pd.DataFrame({
     "Churned": np.random.choice(["Yes", "No"], size=100, p=[0.3, 0.7]),
     "Revenue": np.random.normal(100, 20, 100),
 })
+
+embed_url = "https://app.powerbi.com/reportEmbed?reportId=5d5e6245-c983-496c-b458-c06d2f1113f3&autoAuth=true&ctid=dfe014b9-885d-4e4a-8eb4-597464b165c5"
+
+components.iframe(embed_url, width=1000, height=600)
 
 col1, col2 = st.columns(2)
 
