@@ -2,40 +2,38 @@
 # ИМПОРТ БИБЛИОТЕК
 # ==============================================
 
-# Основные библиотеки для анализа данных
-import streamlit as st  # Для создания веб-интерфейса
-import pandas as pd  # Для работы с табличными данными
-import numpy as np  # Для численных операций
-import matplotlib.pyplot as plt  # Для базовой визуализации
-import seaborn as sns  # Для расширенной визуализации
-import plotly.express as px  # Для интерактивных графиков
+import streamlit as st
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import plotly.express as px
 
-# Библиотеки для геовизуализации
-import holoviews as hv  # Для сложной визуализации
-import geoviews as gv  # Для географических карт
-import datashader as ds  # Для визуализации больших данных
-from datashader.utils import lnglat_to_meters as webm  # Конвертация координат
-from holoviews.operation.datashader import datashade, dynspread, rasterize  # Операции визуализации
-from holoviews.streams import RangeXY  # Для интерактивных элементов
-from colorcet import rainbow, fire  # Цветовые палитры
-from bokeh.models import WMTSTileSource  # Для фоновых карт
-from streamlit_bokeh import streamlit_bokeh  # Интеграция Bokeh с Streamlit
 
-# Библиотеки для машинного обучения
-import joblib  # Для сохранения/загрузки моделей
-from datetime import datetime, timedelta  # Для работы с датами
-from sklearn.preprocessing import StandardScaler, OneHotEncoder  # Препроцессинг
-from sklearn.compose import ColumnTransformer  # Преобразование столбцов
-from sklearn.pipeline import Pipeline  # Создание пайплайнов
-from sklearn.metrics import (  # Метрики оценки моделей
+import holoviews as hv
+import geoviews as gv
+import datashader as ds
+from datashader.utils import lnglat_to_meters as webm
+from holoviews.operation.datashader import datashade, dynspread, rasterize
+from holoviews.streams import RangeXY
+from colorcet import rainbow, fire, bgy, kr
+from bokeh.models import WMTSTileSource
+from streamlit_bokeh import streamlit_bokeh
+
+import joblib
+from datetime import datetime, timedelta
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.metrics import (
     classification_report, roc_auc_score, confusion_matrix, 
     recall_score, precision_score, f1_score, accuracy_score, roc_curve
 )
-from sklearn.model_selection import train_test_split  # Разделение данных
-from sklearn.linear_model import LogisticRegression  # Логистическая регрессия
-from sklearn.tree import DecisionTreeClassifier  # Решающие деревья
-import xgboost as xgb  # Градиентный бустинг
-from scipy import stats  # Статистические функции
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+from sklearn.tree import DecisionTreeClassifier
+import xgboost as xgb
+from scipy import stats
 
 # ==============================================
 # НАСТРОЙКА СТРАНИЦЫ STREAMLIT
@@ -51,10 +49,18 @@ st.set_page_config(
 # ФУНКЦИИ ДЛЯ ЗАГРУЗКИ И ПРЕДОБРАБОТКИ ДАННЫХ
 # ==============================================
 
-# Функция для загрузки и предварительной обработки данных
-@st.cache_data  # Кэширование для ускорения работы
-def load_and_preprocess_data():
-    # Загрузка всех CSV-файлов
+@st.cache_data
+def load_and_preprocess_data() -> tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Загружает все необходимые CSV-файлы, выполняет базовую предобработку,
+    объединяет данные и вычисляет признаки, включая RFM и статус оттока.
+
+    Returns:
+        tuple[pd.DataFrame, pd.DataFrame]: Кортеж из двух DataFrame:
+            - Основной DataFrame со всеми объединенными и обработанными данными.
+            - DataFrame с RFM-метриками для каждого клиента.
+    """
+    # Загрузка данных из CSV файлов
     customers = pd.read_csv('customers.csv')
     orders = pd.read_csv('orders.csv')
     order_payments = pd.read_csv('order_payments.csv')
@@ -64,30 +70,24 @@ def load_and_preprocess_data():
     sellers = pd.read_csv('sellers.csv')
     order_items = pd.read_csv('orders_items.csv')
 
-    # Удаление лишних колонок 'Unnamed: 0' если они есть
     for df in [order_payments, order_reviews, product_category, sellers, order_items]:
         if 'Unnamed: 0' in df.columns:
             df.drop('Unnamed: 0', axis=1, inplace=True)
 
-    # Преобразование дат в orders
     date_cols = [
-        'order_purchase_timestamp', 
+        'order_purchase_timestamp',
         'order_approved_at',
-        'order_delivered_carrier_date', 
+        'order_delivered_carrier_date',
         'order_delivered_customer_date',
         'order_estimated_delivery_date'
     ]
 
-    # Конвертация строк в datetime с обработкой ошибок без уведомления пользователя
+    # Преобразование столбцов с датами в формат datetime
     for col in date_cols:
         orders[col] = pd.to_datetime(orders[col], format='%Y-%m-%d %H:%M:%S', errors='coerce')
-        # Логгировать для разработчика, но не показывать в UI
         invalid_count = orders[col].isnull().sum()
 
-    # Дополнительная загрузка и обработка отзывов
     order_reviews = pd.read_csv('order_reviews.csv')
-    
-    # Преобразование временных меток отзывов
     order_reviews['review_creation_date'] = pd.to_datetime(
         order_reviews['review_creation_date'], 
         format='%Y-%m-%d %H:%M:%S',
@@ -98,7 +98,6 @@ def load_and_preprocess_data():
         format='%Y-%m-%d %H:%M:%S',
         errors='coerce')
     
-    # Обработка дат в order_items
     order_items['shipping_limit_date'] = pd.to_datetime(
         order_items['shipping_limit_date'],
         format='%Y-%m-%d %H:%M:%S', 
@@ -108,84 +107,101 @@ def load_and_preprocess_data():
         order_items['shipping_limit_date.1'],
         format='%Y-%m-%d %H:%M:%S',
         errors='coerce')
-    
-    # Объединение orders и customers
+
+    # Объединение данных о заказах и клиентах
     orders = pd.merge(
-        orders, 
-        customers[['customer_id', 'customer_unique_id', 'customer_city', 'customer_state']], 
-        on='customer_id', 
+        orders,
+        customers[['customer_id', 'customer_unique_id', 'customer_city', 'customer_state']],
+        on='customer_id',
         how='inner'
     )
     orders.drop('customer_id', axis=1, inplace=True)
 
-    # Добавление информации о количестве заказов клиента
     orders['quantity'] = orders.groupby('customer_unique_id')['order_id'].transform('nunique')
 
-    # Объединение с отзывами
+    # Объединение заказов с отзывами
     merge1 = pd.merge(
         orders,
         order_reviews[['order_id', 'review_creation_date', 'review_score']],
         on='order_id',
         how='left'
     )
-    
-    # Удаление NA в ключевых столбцах
-    merge1.dropna(subset=['review_creation_date', 'review_score'], inplace=True)
+
+    #merge1.dropna(subset=['review_creation_date', 'review_score'], inplace=True)
+    merge1.dropna(inplace=True)
     merge1['review_creation_date'] = pd.to_datetime(merge1['review_creation_date'])
 
-    # Расчет признаков оттока
+    # Определение даты для анализа (последняя дата заказа + 1 день)
     analysis_date = merge1['order_purchase_timestamp'].max() + timedelta(days=1)
+
+    ####################################################################################################################################################
     
-    # Сортировка по клиенту и дате заказа
     df_sorted = merge1.sort_values(['customer_unique_id', 'order_purchase_timestamp'])
+    # группируем по клиенту и вычисляем разницу между заказами
+    def calculate_avg_time_between_orders(group):
+        if len(group) > 1:
+            time_diffs = group['order_purchase_timestamp'].diff().dt.days  # разница в днях
+            return time_diffs.median() #медиана
+        else:
+            return pd.NA  # если заказ один, возвращаем NA
     
-    # вычисление разницы между заказами (интервалы)
+    avg_time_between_orders = (
+        df_sorted
+        .groupby('customer_unique_id')
+        .apply(calculate_avg_time_between_orders)
+        .reset_index(name='avg_days_between_orders')
+    )
+    
+    threshold = avg_time_between_orders.avg_days_between_orders.mean() # среднее - 77, медиана - 25
+    
+    # Для каждого клиента вычисляем разницу между датами заказов
     df_sorted['time_diff_days'] = df_sorted.groupby('customer_unique_id')['order_purchase_timestamp'].diff().dt.days
     
-    # Медиана интервалов между заказами
+    # Считаем медиану интервала между заказами по каждому клиенту — она характеризует их частоту покупок
     customer_intervals = df_sorted.groupby('customer_unique_id')['time_diff_days'].median().reset_index()
     customer_intervals.rename(columns={'time_diff_days': 'median_interval_days'}, inplace=True)
     
-    # Статистика по клиентам
+    # Получаем последнюю дату заказа (last_order_date) и общее число заказов (order_count) (сводка по клиенту)
     customer_stats = merge1.groupby('customer_unique_id').agg(
         last_order_date=('order_purchase_timestamp', 'max'),
         order_count=('order_id', 'nunique')
     ).reset_index()
     
-    # Дней с последнего заказа
+    # Количество дней с момента последнего заказа
     customer_stats['days_since_last_order'] = (analysis_date - customer_stats['last_order_date']).dt.days
     
-    # Объединение с интервалами
     customer_features = pd.merge(customer_stats, customer_intervals, on='customer_unique_id', how='left')
     
-    # Динамический порог оттока
-    churn_threshold_multiplier = 2.0
-    default_churn_days = customer_features['days_since_last_order'].mean()
+    # Определяем логику определения оттока
+    churn_threshold_multiplier = 2.0 # Сколько раз нужно выждать средний интервал, прежде чем определять возможность оттока
+    default_churn_days = threshold # Порог для клиентов с разовым заказом
     
     def calculate_dynamic_churn(row):
-        # Если у клиента только один заказ, считается ушедшим, если с последнего заказа прошло больше default_churn_days
         if row['order_count'] == 1:
+            # Если у клиента только один заказ, используем глобальный threshold как порог
             return 1 if row['days_since_last_order'] > default_churn_days else 0
-        # Если медианный интервал между заказами неизвестен или некорректен (меньше/равен нулю), также используется стандартный порог для оценки оттока
         elif pd.isna(row['median_interval_days']) or row['median_interval_days'] <= 0:
-            return 1 if row['days_since_last_order'] > default_churn_days else 0
+             # Если у клиента несколько заказов, но неполные/аномальные интервалы — также fallback на глобальный порог.
+             return 1 if row['days_since_last_order'] > default_churn_days else 0
         else:
-            # Персонализированный порог оттока
+            # Иначе применяем персонализированный порог: медианный интервал * коэффициент, где коэффициент (churn_threshold_multiplier = 2.0) можно настраивать.
             personalized_threshold = row['median_interval_days'] * churn_threshold_multiplier
-            # Если с последнего заказа прошло больше, чем этот персонализированный порог — клиент считается ушедшим
             return 1 if row['days_since_last_order'] > personalized_threshold else 0
     
     customer_features['is_churned'] = customer_features.apply(calculate_dynamic_churn, axis=1)
     
-    # Объединение с основными данными
+    # Объединяем полученные признаки с основным датафреймом
+    # Выбираем только нужные столбцы
+    #churn_data_to_merge = customer_features[['customer_unique_id', 'is_churned', 'days_since_last_order', 'median_interval_days']]
+    
     merge1 = pd.merge(
         merge1,
         customer_features[['customer_unique_id', 'is_churned', 'days_since_last_order', 'median_interval_days']],
         on='customer_unique_id',
         how='left'
     )
-
-    # Обработка products
+##########################################################################################################################################################
+    # Обработка данных о продуктах и категориях
     products = pd.merge(
         products, 
         product_category, 
@@ -196,15 +212,14 @@ def load_and_preprocess_data():
     products = products.rename(columns={'product_category_name_english': 'product_category_name'})
     products['product_category_name'] = products['product_category_name'].str.strip().str.lower()
     products.dropna(subset=['product_category_name'], inplace=True)
-    
-    # Исправление похожих категорий
+
     category_corrections = {
         'home_confort': 'home_comfort',
         'home_appliances_2': 'home_appliances',
     }
     products['product_category_name'] = products['product_category_name'].replace(category_corrections)
 
-    # Объединение с товарами и продавцами
+    # Объединение продуктов с элементами заказа
     merge2 = pd.merge(
         products,
         order_items[['order_id', 'product_id', 'seller_id', 'price']],
@@ -212,6 +227,7 @@ def load_and_preprocess_data():
         how='left'
     ).drop_duplicates()
 
+    # Объединение с данными о продавцах
     merge3 = pd.merge(
         merge2,
         sellers[['seller_id', 'seller_city', 'seller_state']],
@@ -219,7 +235,7 @@ def load_and_preprocess_data():
         how='left'
     )
 
-    # Объединение всех данных
+    # Объединение с основным DataFrame (merge1)
     merge4 = pd.merge(
         merge1,
         merge3,
@@ -227,7 +243,7 @@ def load_and_preprocess_data():
         how='left'
     )
 
-    # Добавление платежей
+    # Объединение с данными об оплате
     merge5 = pd.merge(
         merge4,
         order_payments[['order_id', 'payment_type', 'payment_installments', 'payment_value']],
@@ -235,56 +251,56 @@ def load_and_preprocess_data():
         how='left'
     ).drop_duplicates()
 
-    # Удаление NA в ключевых столбцах
     merge5 = merge5.dropna(subset=['product_id', 'payment_type'])
 
-    # Расчет дополнительных признаков
+    # Расчет временных метрик доставки и обработки заказа
     merge5['approval_delay'] = (merge5['order_approved_at'] - merge5['order_purchase_timestamp']).dt.total_seconds()
     merge5['delivery_time_to_customer_days'] = (merge5['order_delivered_customer_date'] - merge5['order_purchase_timestamp']).dt.days
     merge5['delivery_delay'] = (merge5['order_delivered_customer_date'] - merge5['order_estimated_delivery_date']).dt.days
     merge5['estimated_delivery_time'] = (merge5['order_estimated_delivery_date'] - merge5['order_purchase_timestamp']).dt.days
 
-    # Удаление нелогичных строк (проверка временных меток)
+    # Фильтрация некорректных временных интервалов
     merge5 = merge5[
         (merge5['order_approved_at'] < merge5['order_delivered_customer_date']) &
         (merge5['order_approved_at'] < merge5['order_delivered_carrier_date']) &
         (merge5['order_delivered_carrier_date'] < merge5['order_delivered_customer_date'])
     ]
 
-    # RFM анализ (Recency, Frequency, Monetary)
+    # Расчет RFM метрик (Recency, Frequency, MonetaryValue)
     rfm = merge5.groupby('customer_unique_id').agg({
-        'order_purchase_timestamp': 'max',
-        'order_id': 'nunique',
-        'payment_value': 'sum'
+        'order_purchase_timestamp': 'max', # Recency (дата последней покупки)
+        'order_id': 'nunique',            # Frequency (количество заказов)
+        'payment_value': 'sum'            # MonetaryValue (сумма покупок)
     }).reset_index()
-    
+
     rfm.columns = ['customer_unique_id', 'last_order', 'Frequency', 'MonetaryValue']
     rfm['Recency'] = (analysis_date - rfm['last_order']).dt.days
     rfm.drop('last_order', axis=1, inplace=True)
-    
-    # Расчет RFM Scores
+
     quantiles = rfm[['Recency', 'Frequency', 'MonetaryValue']].quantile(q=[0.2, 0.4, 0.6, 0.8]).to_dict()
-    
-    def RScore(x, p, d):
+
+    def RScore(x, p, d) -> int:
+        """Присваивает R-скор на основе значения Recency и квантилей."""
         if x <= d[p][0.2]: return 5
         elif x <= d[p][0.4]: return 4
         elif x <= d[p][0.6]: return 3
         elif x <= d[p][0.8]: return 2
         else: return 1
-    
-    def FMScore(x, p, d):
+
+    def FMScore(x, p, d) -> int:
+        """Присваивает F и M скоры на основе значений Frequency/MonetaryValue и квантилей."""
         if x <= d[p][0.2]: return 1
         elif x <= d[p][0.4]: return 2
         elif x <= d[p][0.6]: return 3
         elif x <= d[p][0.8]: return 4
         else: return 5
-    
+
     rfm['R'] = rfm['Recency'].apply(RScore, args=('Recency', quantiles))
     rfm['F'] = rfm['Frequency'].apply(FMScore, args=('Frequency', quantiles))
     rfm['M'] = rfm['MonetaryValue'].apply(FMScore, args=('MonetaryValue', quantiles))
     rfm['RFM_Score'] = rfm[['R', 'F', 'M']].sum(axis=1)
-    
-    # Объединение RFM с основными данными
+
+    # Объединение RFM метрик с основным DataFrame
     merge6 = pd.merge(
         merge5,
         rfm[['customer_unique_id', 'Frequency', 'MonetaryValue', 'Recency', 'R', 'F', 'M', 'RFM_Score']],
@@ -292,84 +308,83 @@ def load_and_preprocess_data():
         how='left'
     )
 
-    # Выбор финальных признаков для модели
     features = ['customer_unique_id', 'customer_city', 'customer_state', 'order_status', 'payment_type',
         'payment_installments', 'payment_value', 'review_score', 'price',
         'product_weight_g', 'seller_city', 'seller_state', 'product_category_name',
         'approval_delay', 'delivery_time_to_customer_days', 'estimated_delivery_time',
         'delivery_delay', 'RFM_Score', 'is_churned'
     ]
+
     merge6.dropna(subset=features, inplace=True)
-    
-    return merge6[features], rfm
 
-# Функция для загрузки и подготовки географических данных
-@st.cache_data(show_spinner=True)
-def load_and_prepare_geo():
-    geo = pd.read_csv("geolocation.csv", dtype={'geolocation_zip_code_prefix': str})
+    return merge6[features], rfm, merge6
 
-    # Создание префиксов почтовых индексов разной длины
+@st.cache_data(show_spinner="🌎 загружаем geo …")
+def load_geo():
+    geo = pd.read_csv("geolocation.csv", dtype={"geolocation_zip_code_prefix": str})
     for n in range(1, 5):
-        geo[f'geolocation_zip_code_prefix_{n}_digits'] = geo['geolocation_zip_code_prefix'].str[:n]
-
-    # Фильтрация координат по границам Бразилии
+        geo[f"geolocation_zip_code_prefix_{n}_digits"] = geo["geolocation_zip_code_prefix"].str[:n]
     geo = geo.query(
-        "geolocation_lat <= 5.27438888 and geolocation_lng >= -73.98283055 "
-        "and geolocation_lat >= -33.75116944 and geolocation_lng <= -34.79314722"
+        "geolocation_lat <= 5.27438888 and geolocation_lng >= -73.98283055 and "
+        "geolocation_lat >= -33.75116944 and geolocation_lng <= -34.79314722"
     )
-
-    # Конвертация координат в метры
-    geo['x'], geo['y'] = webm(geo.geolocation_lng, geo.geolocation_lat)
-
-    # Преобразование префиксов в числа
-    int_cols = [c for c in geo.columns if 'prefix' in c]
-    geo[int_cols] = geo[int_cols].astype(int)
-
+    geo["x"], geo["y"] = webm(geo.geolocation_lng, geo.geolocation_lat)
+    geo[[c for c in geo.columns if "prefix" in c]] = geo.filter(like="prefix").astype(int)
     return geo
 
-# Функция для загрузки данных о заказах
-@st.cache_data(show_spinner=True)
+@st.cache_data(show_spinner="📦 загружаем orders …")
 def load_orders():
-    orders_df = pd.read_csv("orders.csv")
-    order_items = pd.read_csv("orders_items.csv")
-    order_reviews = pd.read_csv("order_reviews.csv")
-    customers = pd.read_csv("customers.csv", dtype={'customer_zip_code_prefix': str})
-
-    # Создание 3-значного префикса почтового индекса
-    customers['customer_zip_code_prefix_3_digits'] = (
-        customers['customer_zip_code_prefix'].str[:3].astype(int)
+    o   = pd.read_csv("orders.csv")
+    it  = pd.read_csv("orders_items.csv")
+    rv  = pd.read_csv("order_reviews.csv")
+    cu  = pd.read_csv("customers.csv", dtype={"customer_zip_code_prefix": str})
+    cu["customer_zip_code_prefix_3_digits"] = cu["customer_zip_code_prefix"].str[:3].astype(int)
+    return (
+        o.merge(it, on="order_id").merge(cu, on="customer_id").merge(rv, on="order_id")
     )
-
-    # Объединение всех таблиц в одну
-    orders = (
-        orders_df
-        .merge(order_items, on='order_id')
-        .merge(customers, on='customer_id')
-        .merge(order_reviews, on='order_id')
-    )
-
-    return orders
 
 # ==============================================
 # НАСТРОЙКИ МОДЕЛЕЙ МАШИННОГО ОБУЧЕНИЯ
 # ==============================================
 
-# Определение числовых и категориальных признаков
 numerical_features = ['payment_value','review_score','price','product_weight_g',
                   'approval_delay', 'RFM_Score']
 categorical_features = ['customer_city','customer_state','order_status','payment_type',
                       'payment_installments','seller_city','seller_state','product_category_name']
 
-# Функция для расчета специфичности (True Negative Rate)
-def calculate_specificity(y_true, y_pred):
+def calculate_specificity(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    """
+    Рассчитывает специфичность (True Negative Rate) модели.
+
+    Args:
+        y_true (np.ndarray): Истинные метки классов.
+        y_pred (np.ndarray): Предсказанные метки классов.
+
+    Returns:
+        float: Значение специфичности.
+    """
     tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
+
+    if (tn + fp) == 0:
+        return 0.0
     return tn / (tn + fp)
 
-# Функция для расширенного отчета по классификации
-def extended_classification_report(y_true, y_pred, y_proba, model_name):
+def extended_classification_report(y_true: np.ndarray, y_pred: np.ndarray, y_proba: np.ndarray, model_name: str) -> dict:
+    """
+    Рассчитывает расширенный набор метрик классификации.
+
+    Args:
+        y_true (np.ndarray): Истинные метки классов.
+        y_pred (np.ndarray): Предсказанные метки классов.
+        y_proba (np.ndarray): Вероятности принадлежности к классу 1.
+        model_name (str): Название модели (для информации).
+
+    Returns:
+        dict: Словарь с рассчитанными метриками.
+    """
     metrics = {
         'specificity': calculate_specificity(y_true, y_pred),
-        'sensitivity': recall_score(y_true, y_pred),
+        'sensitivity': recall_score(y_true, y_pred), # Recall
         'precision': precision_score(y_true, y_pred),
         'f1': f1_score(y_true, y_pred),
         'roc_auc': roc_auc_score(y_true, y_proba),
@@ -377,44 +392,71 @@ def extended_classification_report(y_true, y_pred, y_proba, model_name):
     }
     return metrics
 
-# Создание пайплайна для предобработки данных
 preprocessor = ColumnTransformer(
     transformers=[
-        ('num', StandardScaler(), numerical_features),  # Нормализация числовых признаков
-        ('cat', OneHotEncoder(handle_unknown='ignore'), categorical_features)  # Кодирование категориальных
+        ('num', StandardScaler(), numerical_features), # Масштабирование числовых признаков
+        ('cat', OneHotEncoder(handle_unknown='ignore'), categorical_features) # One-Hot кодирование категориальных
     ])
 
-# Функция для обучения модели
-def train_model(model, X_train, y_train):
+def train_model(model, X_train: pd.DataFrame, y_train: pd.Series) -> Pipeline:
+    """
+    Создает пайплайн с препроцессором и моделью, обучает его.
+
+    Args:
+        model: Экземпляр модели машинного обучения (например, LogisticRegression).
+        X_train (pd.DataFrame): Обучающие признаки.
+        y_train (pd.Series): Обучающие целевые метки.
+
+    Returns:
+        Pipeline: Обученный пайплайн Scikit-learn.
+    """
     pipeline = Pipeline([
-        ('preprocessor', preprocessor),  # Этап предобработки
-        ('classifier', model)  # Модель классификации
+        ('preprocessor', preprocessor), # Шаг предобработки
+        ('classifier', model)          # Шаг классификации
     ])
-    pipeline.fit(X_train, y_train)
+    pipeline.fit(X_train, y_train) # Обучение пайплайна
     return pipeline
 
-# Функция для предсказания оттока
-def predict_churn(model, X):
-    y_pred = model.predict(X)  # Предсказанные классы
-    y_proba = model.predict_proba(X)[:, 1]  # Вероятности положительного класса
+def predict_churn(model: Pipeline, X: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Делает предсказания классов и вероятностей с помощью обученного пайплайна.
+
+    Args:
+        model (Pipeline): Обученный пайплайн.
+        X (pd.DataFrame): Данные для предсказания.
+
+    Returns:
+        tuple[np.ndarray, np.ndarray]: Кортеж из предсказанных меток и вероятностей класса 1.
+    """
+    y_pred = model.predict(X) # Предсказание классов
+    y_proba = model.predict_proba(X)[:, 1] # Предсказание вероятностей класса 1
     return y_pred, y_proba
 
-# Кэшированная загрузка данных
 @st.cache_data
-def load_data():
+def load_data() -> tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Обертка для кэширования функции загрузки и предобработки данных.
+
+    Returns:
+        tuple[pd.DataFrame, pd.DataFrame]: Результат выполнения load_and_preprocess_data().
+    """
     return load_and_preprocess_data()
 
 # ==============================================
 # ОСНОВНАЯ ФУНКЦИЯ ДЛЯ ЗАПУСКА ПРИЛОЖЕНИЯ
 # ==============================================
 def main():
+    """
+    Основная функция, запускающая Streamlit приложение для анализа оттока.
+    Включает загрузку данных, фильтрацию, визуализацию и моделирование.
+    """
     st.title("📊 Анализ оттока клиентов")
     
-    # Загрузка данных с обработкой возможных ошибок
+    load_data()[2].to_csv('merge6.csv', index=False)
+
     try:
         df = load_data()[0]
         
-        # Проверка наличия ключевых колонок
         required_columns = ['customer_state', 'payment_value', 'review_score', 
                           'RFM_Score', 'is_churned']
         missing_cols = [col for col in required_columns if col not in df.columns]
@@ -423,17 +465,25 @@ def main():
             st.error(f"Отсутствуют ключевые колонки: {missing_cols}")
             st.stop()
         
-        # Боковая панель с фильтрами
         st.sidebar.header("🔍 Фильтры")
         
-        # Фильтр по региону (штату)
+        # получаем все штаты
+        all_states = sorted(df['customer_state'].unique())
+        # инициализируем session_state единожды
+        if 'selected_states' not in st.session_state:
+            st.session_state.selected_states = all_states.copy()
+
+        if st.sidebar.button("Выбрать все", key="select_all"):
+            st.session_state.selected_states = all_states.copy()
+
+        # сам multiselect теперь ниже
         selected_states = st.sidebar.multiselect(
-            "Выберите регионы:",
-            options=df['customer_state'].unique(),
-            default=df['customer_state'].unique()
+            "Выберите штаты:",
+            options=all_states,
+            default=st.session_state.selected_states,
+            key="selected_states"
         )
         
-        # Фильтр по RFM Score
         rfm_range = st.sidebar.slider(
             "Диапазон RFM Score:",
             min_value=int(df['RFM_Score'].min()),
@@ -441,130 +491,230 @@ def main():
             value=(int(df['RFM_Score'].min()), int(df['RFM_Score'].max()))
         )
         
-        # Применение фильтров к данным
         filtered_df = df[
             (df['customer_state'].isin(selected_states)) &
             (df['RFM_Score'].between(rfm_range[0], rfm_range[1]))
         ]
+
+        # Это штука делает текст вкладок больше
+        st.markdown(
+        """
+        <style>
+        /* Target the tab buttons and their inner text */
+        div[data-baseweb="tab-list"] button[role="tab"] > div {
+            font-size: 20px !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+        )
         
-        # Создание вкладок интерфейса
-        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📈 Обзор", "🌳 Древовидная карта", "📊 Распределения", "🔍 Детали", "🤖 Модели", "🗺️ Карта"])
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["📈 Обзор", "🌳 Древовидная карта", "📊 Распределения", "🔍 Детали", "🤖 Модели", "🗺️ Карта", "🧑‍💻 Power BI"])
         
         # Вкладка 1: Обзор
         with tab1:
-            # Ключевые метрики в колонках
             col1, col2, col3 = st.columns(3)
             col1.metric("Всего клиентов", filtered_df['customer_unique_id'].nunique())
             col2.metric("Уровень оттока", 
-                       f"{filtered_df['is_churned'].mean():.1%}",
-                       help="Доля клиентов с is_churned=1")
+                    f"{filtered_df['is_churned'].mean():.1%}")
             col3.metric("Средний RFM Score", 
-                       f"{filtered_df['RFM_Score'].mean():.1f}")
+                    f"{filtered_df['RFM_Score'].mean():.1f}")
+
+            # График топ регионов по оттоку
+            st.subheader("Топ штатов по оттоку")
+
+            # Подготовка данных
+            churn_by_state = (filtered_df.groupby('customer_state')['is_churned']
+                            .mean()
+                            .sort_values(ascending=False)
+                            .reset_index())
+            churn_by_state.columns = ['Штат', 'Уровень оттока']
+
+            # Создание интерактивного графика Plotly
+            fig = px.bar(
+                churn_by_state,
+                x='Штат',
+                y='Уровень оттока',
+                color='Уровень оттока',
+                color_continuous_scale='Blues',
+                text='Уровень оттока'
+            )
+
+            # Настройка внешнего вида
+            fig.update_traces(
+                texttemplate='%{text:.1%}',
+                textposition='outside'
+            )
             
-            # Визуализация оттока по регионам
-            st.subheader("Топ регионов по оттоку")
-            churn_by_state = filtered_df.groupby('customer_state')['is_churned'].mean().sort_values(ascending=False)
-            st.bar_chart(churn_by_state)
+            fig.update_layout(
+                xaxis_title='Штат',
+                yaxis_title='',
+                yaxis=dict(showticklabels=False, showgrid=False),
+                yaxis_tickformat='.0%',
+                coloraxis_showscale=False,
+                hovermode='x',
+                height=500
+            )
+
+            # Отображение графика в Streamlit
+            st.plotly_chart(fig, use_container_width=True)
+
+            # Дополнительный график с распределением клиентов по штатам
+            st.subheader("Распределение клиентов по штатам")
+
+            # Подготовка данных
+            customers_by_state = (filtered_df['customer_state']
+                                .value_counts()
+                                .sort_values(ascending=False)
+                                .reset_index())
+            customers_by_state.columns = ['Штат', 'Количество клиентов']
+
+            # Создание графика
+            fig2 = px.bar(
+                customers_by_state,
+                x='Штат',
+                y='Количество клиентов',
+                color='Количество клиентов',
+                color_continuous_scale='Blues',
+                text='Количество клиентов',
+            )
+
+            # Настройка внешнего вида
+            fig2.update_traces(
+                textposition='outside'
+            )
+            fig2.update_layout(
+                xaxis_title='Штат',
+                yaxis_title='',
+                yaxis=dict(showticklabels=False, showgrid=False),
+                coloraxis_showscale=False,
+                hovermode='x',
+                height=500
+            )
+
+            st.plotly_chart(fig2, use_container_width=True)
+
+            merge6 = load_data()[2]
+
+            heatmap_data = merge6.groupby(['customer_state', 'product_category_name'])['is_churned'].mean().reset_index()
+
+            fig = px.density_heatmap(
+            heatmap_data,
+            x='customer_state',
+            y='product_category_name',
+            z='is_churned',
+            color_continuous_scale='Blues',
+            labels={'is_churned': '% оттока'},
+            width=1400,
+            height=1000
+            )
+
+            fig.update_layout(
+                xaxis_title="Регион",
+                yaxis_title="Категория товара",
+                hovermode='closest',
+
+                font=dict(size=18),
+
+                xaxis=dict(
+                    title_font=dict(size=20),
+                    tickfont=dict(size=16)
+                ),
+                yaxis=dict(
+                    title_font=dict(size=20),
+                    tickfont=dict(size=16)
+                )
+            )
+
+            st.subheader("Уровень оттока по штатам и категориям товаров")
+            st.plotly_chart(fig, use_container_width=True)
 
         # Вкладка 2: Древовидная карта по сегментам
         with tab2:
-            # Создаем понятные названия
-                segt_map = {
-                    r'[1-2][1-2]': 'Спящие', #Hibernating
-                    r'[1-2][3-4]': 'В зоне риска', #At risk
-                    r'[1-2]5': 'Нельзя потерять', #Can\'t lose them
-                    r'3[1-2]': 'На грани ухода', #About to sleep
-                    r'33': 'Требуют внимания', #Need attention
-                    r'[3-4][4-5]': 'Лояльные клиенты', #Loyal customers
-                    r'41': 'Перспективные', #Promising
-                    r'51': 'Новые клиенты', #New customers
-                    r'[4-5][2-3]': 'Potential loyalists', #Potential loyalists
-                    r'5[4-5]': 'Чемпионы' #Champions
-                }
+            st.subheader("RFM сегменты")
 
-                rfm = load_data()[1]
-                # Формируем сегмент и финальный балл RFM_Score.
-                # Присваиваем читаемые метки сегментам
-                rfm['Segment'] = rfm['R'].map(str) + rfm['F'].map(str)
-                rfm['Segment'] = rfm['Segment'].replace(segt_map, regex=True)
+            segt_map = {
+                r'[1-2][1-2]': 'Спящие',
+                r'[1-2][3-4]': 'В зоне риска',
+                r'[1-2]5': 'Нельзя потерять',
+                r'3[1-2]': 'На грани ухода',
+                r'33': 'Требуют внимания',
+                r'[3-4][4-5]': 'Лояльные клиенты',
+                r'41': 'Перспективные',
+                r'51': 'Новые клиенты',
+                r'[4-5][2-3]': 'Potential loyalists',
+                r'5[4-5]': 'Чемпионы'
+            }
 
-                # Считаем количество клиентов в каждом сегменте и процент от общего числа.
-                fig3 = rfm.groupby('Segment').agg({'customer_unique_id': lambda x: len(x)}).reset_index()
+            rfm = load_data()[1]
+            rfm['Segment'] = rfm['R'].map(str) + rfm['F'].map(str)
+            rfm['Segment'] = rfm['Segment'].replace(segt_map, regex=True)
 
-                fig3.rename(columns={'customer_unique_id': 'Count'}, inplace=True)
-                fig3['percent'] = (fig3['Count'] / fig3['Count'].sum()) * 100
-                fig3['percent'] = fig3['percent'].round(1)
+            fig3 = rfm.groupby('Segment').agg({'customer_unique_id': lambda x: len(x)}).reset_index()
 
-                # Создаем столбец с текстом для отображения (название, количество, процент)
-                fig3['display_text'] = fig3['Segment'] + '<br>Количество: ' + fig3['Count'].astype(str) + '<br>' + fig3['percent'].astype(str) + '%'
+            fig3.rename(columns={'customer_unique_id': 'Count'}, inplace=True)
+            fig3['percent'] = (fig3['Count'] / fig3['Count'].sum()) * 100
+            fig3['percent'] = fig3['percent'].round(1)
 
-                # Строим древовидную карту (Treemap) по сегментам.
-                #colors=['#83af70','#9fbf8f','#bad0af','#d5e0cf','#f1f1f1','#f1d4d4','#f0b8b8','#ec9c9d'] #green
-                colors = [
-                    '#1a4b7d',  # Глубокий приглушенный синий (как в RdBu для отрицательных значений)
-                    '#3a6ea5',  # Насыщенный синий
-                    '#5d8fc7',  # Классический синий
-                    '#89b0d9',  # Светло-синий
-                    '#b5d0e8',  # Очень светлый синий
-                    '#d9e6f2',  # Почти белый с синим оттенком
-                    '#e6eef7',  # Еще светлее
-                    '#f2f7fb'   # Почти белый
-                ]
+            fig3['display_text'] = fig3['Segment'] + '<br>Количество: ' + fig3['Count'].astype(str) + '<br>' + fig3['percent'].astype(str) + '%'
 
-                #import plotly.express as px
+            colors = [
+                '#1a4b7d',
+                '#3a6ea5',
+                '#5d8fc7',
+                '#89b0d9',
+                '#b5d0e8',
+                '#d9e6f2',
+                '#e6eef7',
+                '#f2f7fb'
+            ]
 
-                fig = px.treemap(fig3, path=['Segment'], values='Count',
-                                width=800, height=400,
-                                title="RFM сегменты")
+            fig = px.treemap(fig3, path=['Segment'], values='Count',
+                            width=800, height=400
+                            )
 
-                # Настраиваем отображение текста
-                fig.update_traces(text=fig3['display_text'],
-                                textinfo='text',  
-                                textposition='middle center',
-                                textfont_size=14,
-                                hovertemplate=(
-                        "<b>%{label}</b><br>" +
-                        "Количество: %{value:,}<br>" +
-                        "Процент: %{customdata[0]:.1f}%" +
-                        "<extra></extra>"),
-                    customdata=fig3[['percent']])  
+            fig.update_traces(text=fig3['display_text'],
+                            textinfo='text',  
+                            textposition='middle center',
+                            textfont_size=14,
+                            hovertemplate=(
+                    "<b>%{label}</b><br>" +
+                    "Количество: %{value:,}<br>" +
+                    "Процент: %{customdata[0]:.1f}%" +
+                    "<extra></extra>"),
+                customdata=fig3[['percent']])  
 
+            fig.update_layout(
+                treemapcolorway = colors, 
+                margin=dict(t=50, l=25, r=25, b=25))
 
-                fig.update_layout(
-                    treemapcolorway = colors, 
-                    margin=dict(t=50, l=25, r=25, b=25))
-
-                st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True)
 
         # Вкладка 3: Распределения
         with tab3:
-            # Гистограмма распределения RFM Score
             st.subheader("Распределение RFM Score")
             fig1 = px.histogram(filtered_df, x='RFM_Score', color='is_churned',
                               nbins=20, barmode='overlay')
             st.plotly_chart(fig1, use_container_width=True)
             
-            # Матрица корреляций
             st.subheader("Корреляция признаков")
             num_cols = ['payment_value', 'review_score', 'RFM_Score', 'is_churned']
             corr_matrix = filtered_df[num_cols].corr()
-            fig2 = px.imshow(corr_matrix, text_auto=True)
+            fig2 = px.imshow(corr_matrix, text_auto=True,
+                            width=800, height=600)
             st.plotly_chart(fig2, use_container_width=True)
         
         # Вкладка 4: Детали по клиентам
         with tab4:
             st.subheader("Детали по клиентам")
             
-            # Выбор конкретного клиента для анализа
             selected_customer = st.selectbox(
                 "Выберите клиента:",
                 options=filtered_df['customer_unique_id'].unique()
             )
             
-            # Получение данных выбранного клиента
             customer_data = filtered_df[filtered_df['customer_unique_id'] == selected_customer].iloc[0]
             
-            # Отображение информации о клиенте
             col1, col2 = st.columns(2)
             with col1:
                 st.metric("Регион", customer_data['customer_state'])
@@ -582,27 +732,23 @@ def main():
                          delta_color="inverse" if is_churned else "normal"
                          )
     
-        # Вкладка 5: Модели машинного обучения
+        # Вкладка 5: Модели
         with tab5:
             st.header("Прогнозирование оттока клиентов")
             
-            # Разделение данных на обучающую и тестовую выборки
             X = filtered_df[numerical_features + categorical_features]
             y = filtered_df['is_churned']
             
             X_train, X_test, y_train, y_test = train_test_split(
                 X, y, test_size=0.3, random_state=42, stratify=y)
             
-            # Выбор типа модели
             model_option = st.selectbox(
                 "Выберите модель:",
                 ("Logistic Regression", "Decision Tree", "XGBoost")
             )
             
-            # Кнопка для запуска обучения модели
             if st.button("Обучить модель"):
                 with st.spinner("Обучение модели..."):
-                    # Инициализация выбранной модели
                     if model_option == "Logistic Regression":
                         model = LogisticRegression(
                             class_weight='balanced',
@@ -630,18 +776,14 @@ def main():
                             n_jobs=-1
                         )
                     
-                    # Обучение модели
                     pipeline = train_model(model, X_train, y_train)
-                    st.session_state.trained_pipeline = pipeline  # Сохранение в сессии
-                    st.session_state.model_option = model_option # Сохранение названия модели
+                    st.session_state.trained_pipeline = pipeline
+                    st.session_state.model_option = model_option
 
-                    # Получение предсказаний
                     y_pred, y_proba = predict_churn(pipeline, X_test)
                     
-                    # Расчет метрик качества
                     metrics = extended_classification_report(y_test, y_pred, y_proba, model_option)
                     
-                    # Отображение метрик
                     st.subheader("Метрики модели")
                     col1, col2, col3 = st.columns(3)
                     col1.metric("ROC-AUC", f"{metrics['roc_auc']:.4f}")
@@ -653,7 +795,6 @@ def main():
                     col5.metric("Specificity", f"{metrics['specificity']:.4f}")
                     col6.metric("Precision", f"{metrics['precision']:.4f}")
                     
-                    # Визуализация ROC-кривой
                     st.subheader("ROC-кривая")
                     fpr, tpr, _ = roc_curve(y_test, y_proba)
                     fig = px.line(x=fpr, y=tpr, 
@@ -663,7 +804,6 @@ def main():
                                 x0=0, x1=1, y0=0, y1=1)
                     st.plotly_chart(fig, use_container_width=True)
                     
-                    # Визуализация матрицы ошибок
                     st.subheader("Матрица ошибок")
                     cm = confusion_matrix(y_test, y_pred)
                     fig_cm = px.imshow(cm, 
@@ -675,20 +815,17 @@ def main():
                     
                     st.success(f"Модель {model_option} успешно обучена!")
 
-            # Блок для скачивания обученной модели
             if 'trained_pipeline' in st.session_state:
                 st.subheader("Скачать обученную модель")
                 pipeline_to_save = st.session_state.trained_pipeline
                 model_option_to_save = st.session_state.model_option
                 model_filename = f'{model_option_to_save.replace(" ", "_").lower()}_model.pkl'
                 
-                # Сериализация модели в байты
                 from io import BytesIO
                 model_bytes = BytesIO()
                 joblib.dump(pipeline_to_save, model_bytes)
                 model_bytes.seek(0)
 
-                # Кнопка для скачивания
                 st.download_button(
                     label=f"Скачать {model_option_to_save.replace(" ", "_")}.pkl",
                     data=model_bytes,
@@ -696,7 +833,6 @@ def main():
                     mime="application/octet-stream"
                 )
 
-            # Блок для прогнозирования оттока конкретного клиента
             st.subheader("Прогноз для конкретного клиента")
             customer_id_predict = st.selectbox(
                 "Выберите клиента для прогноза:",
@@ -705,23 +841,18 @@ def main():
             )
             
             if st.button("Сделать прогноз"):
-                # Проверка наличия обученной модели
                 if 'trained_pipeline' not in st.session_state:
                     st.error("Модель не обучена. Пожалуйста, сначала обучите модель на этой вкладке.")
                 else:
                     try:
-                        # Загрузка модели из сессии
                         pipeline = st.session_state.trained_pipeline
                         current_model_option = st.session_state.model_option
                         
-                        # Получение данных клиента
                         customer_data = filtered_df[filtered_df['customer_unique_id'] == customer_id_predict].iloc[0:1]
                         X_customer = customer_data[numerical_features + categorical_features]
                         
-                        # Получение предсказания
                         pred, proba = predict_churn(pipeline, X_customer)
                         
-                        # Отображение результатов
                         st.subheader("Результат прогноза")
                         col1, col2 = st.columns(2)
                         col1.metric("Вероятность оттока", f"{proba[0]:.2%}")
@@ -736,33 +867,25 @@ def main():
                                    delta_color="inverse" if is_high_risk else "normal"
                                    )
 
-                        # Визуализация важности признаков (для tree-based моделей)
                         if current_model_option in ["Decision Tree", "XGBoost"]:
                             st.subheader("Важность признаков")
                             try:
-                                # Получение классификатора из пайплайна
                                 classifier = pipeline.named_steps['classifier']
                                 
-                                # Получение препроцессора
                                 preprocessor_step = pipeline.named_steps['preprocessor']
                                 
-                                # Получение имен признаков после OneHotEncoding
                                 ohe_feature_names = preprocessor_step.transformers_[1][1]\
                                     .get_feature_names_out(categorical_features)
                                 
-                                # Объединение имен признаков
                                 feature_names = numerical_features + list(ohe_feature_names)
                                 
-                                # Получение важности признаков
                                 importances = classifier.feature_importances_
                                 
-                                # Создание DataFrame для визуализации
                                 importance_df = pd.DataFrame({
                                     'feature': feature_names,
                                     'importance': importances
                                 }).sort_values(by='importance', ascending=False)
                                 
-                                # Визуализация топ-15 признаков
                                 top_n = 15
                                 fig_importance = px.bar(
                                     importance_df.head(top_n),
@@ -781,173 +904,181 @@ def main():
                     except Exception as e:
                         st.error(f"Ошибка при прогнозировании: {str(e)}")
 
-            # Вкладка 6: Географическая визуализация
+            # Вкладка 6: Карта
             with tab6:
-                st.subheader("Доход от заказов (тыс. реалов)")
-
-                # Настройка HoloViews
-                hv.extension('bokeh', logo=False)
-
-                # Параметры для визуализации
-                overlay_opts = dict(width=800, height=600, toolbar='above', xaxis=None, yaxis=None)
-                quad_opts = dict(tools=['hover'], colorbar=True, alpha=0, hover_alpha=0.2)
-                gv.opts.defaults(
-                    gv.opts.Overlay(**overlay_opts),
-                    gv.opts.QuadMesh(**quad_opts)
-                )
-
-                # Загрузка географических данных
-                brazil = load_and_prepare_geo()
-
-                # Имя столбца для агрегации
-                agg_name = 'geolocation_zip_code_prefix'
-
-                T  = 0.05 # dynspread threshold
-                PX = 1 # dynspread px growth
-
-                # Функция для построения карты почтовых индексов
-                def plotted_zipcodes(df, agg_name=agg_name, cmap=rainbow):
-                    # Фоновые тайлы (темно-серая карта)
-                    url = (
-                        "https://server.arcgisonline.com/ArcGIS/rest/services/"
-                        "Canvas/World_Dark_Gray_Base/MapServer/tile/{Z}/{Y}/{X}.png"
-                    )
-                    geomap  = gv.WMTS(WMTSTileSource(url=url))
-
-                    # Точки в проекционных координатах
-                    points  = hv.Points(gv.Dataset(df, kdims=['x', 'y'], vdims=[agg_name]))
-
-                    # Агрегация с помощью datashader
-                    agg = datashade(points,
-                                    element_type=gv.Image,
-                                    aggregator=ds.min(agg_name),
-                                    cmap=cmap)
-
-                    # Настройка видимости
-                    zipcodes = dynspread(agg, threshold=T, max_px=PX)
-
-                    # Интерактивный слой для hover
-                    hover = hv.util.Dynamic(
-                        rasterize(points,
-                                aggregator=ds.min(agg_name),
-                                width=50,
-                                height=25,
-                                streams=[RangeXY]
-                        ),
-                        operation=hv.QuadMesh
-                    ).opts(cmap=cmap)
-
-                    return geomap * zipcodes * hover
-
-                # Отображение карты с индикатором загрузки
-                with st.spinner('Загружаем карту...'):
-                    bokeh_fig = hv.render(plotted_zipcodes(brazil), backend='bokeh')
-
-                # Функция для фильтрации данных по региону/городу
-                def filter_data(df, level, name):
-                    df = df[df[level] == name]
-                    df = df[(df.x <= df.x.quantile(0.999)) & (df.x >= df.x.quantile(0.001))]
-                    df = df[(df.y <= df.y.quantile(0.999)) & (df.y >= df.y.quantile(0.001))]
-                    return df
-                
-                # Функция для построения DataFrame с доходами
-                def build_revenue_df(geo, orders):
-                    geo3 = geo.set_index('geolocation_zip_code_prefix_3_digits').copy()
-
-                    # Группировка по почтовому индексу и суммирование цен
-                    gp = orders.groupby('customer_zip_code_prefix_3_digits')['price'].sum()
-
-                    # Объединение с геоданными
-                    revenue = geo3.join(gp)
-                    revenue['revenue'] = revenue['price'].fillna(0) / 1_000  # Конвертация в тысячи
-
-                    return revenue
-                
-                # Функция для построения карты доходов
-                def map_plot(df, agg_name='revenue', cmap=fire):
-                    T, PX = 0.05, 1
-                    url = (
-                        "https://server.arcgisonline.com/ArcGIS/rest/services/"
-                        "Canvas/World_Dark_Gray_Base/MapServer/tile/{Z}/{Y}/{X}.png"
-                    )
-                    geomap = gv.WMTS(WMTSTileSource(url=url))
-
-                    points = hv.Points(gv.Dataset(df, kdims=['x', 'y'], vdims=[agg_name]))
-
-                    # Агрегация данных для визуализации
-                    agg = datashade(points,
-                                    element_type=gv.Image,
-                                    aggregator=ds.mean(agg_name),
-                                    cmap=cmap)
-                    img = dynspread(agg, threshold=T, max_px=PX)
-
-                    # Интерактивный слой
-                    hover = hv.util.Dynamic(
-                        rasterize(points,
-                                aggregator=ds.mean(agg_name),
-                                width=50, height=25,
-                                streams=[RangeXY]),
-                        operation=hv.QuadMesh
-                    ).opts(cmap=cmap)
-
-                    return geomap * img * hover
-
-                # Загрузка данных
-                geo = load_and_prepare_geo()
+                geo    = load_geo()
                 orders = load_orders()
 
-                # Фильтры на боковой панели
-                st.sidebar.header("📍 Карта")
-                states = ['<all brazil>'] + sorted(geo['geolocation_state'].unique())
-                state_choice = st.sidebar.selectbox("state (uf)", states, index=0)
+                T, PX = 0.05, 1
 
-                # Получение списка городов для выбранного штата
-                cities_in_state = sorted(geo.query("geolocation_state == @state_choice")['geolocation_city'].str.lower().unique())
+                # ─── HoloViews → Bokeh opts (FULL‑WIDTH, RESPONSIVE) ───────────────────
+                hv.extension("bokeh", logo=False)
 
-                # Применение фильтров
-                sub_geo = filter_data(geo, 'geolocation_state', state_choice)
+                gv.opts.defaults(
+                    gv.opts.Overlay(
+                        height   = 700,           # какая высота нужна
+                        toolbar  = "above",
+                        xaxis    = None,
+                        yaxis    = None,
+                        responsive=True           # можно и без, но лишним не будет
+                    ),
+                    gv.opts.QuadMesh(
+                        tools      = ["hover"],
+                        colorbar   = True,
+                        alpha      = 0,
+                        hover_alpha= 0.2,
+                    ),
+                )
 
-                if state_choice == '<all brazil>':
-                    sub_geo    = geo.copy()                     
-                    sub_orders = orders.copy()                  
+                # Вспомогательные функции
+
+                def make_map(df, col, title, cmap):
+                    """
+                    returns a holoviews overlay (bokeh renderable) showing df[col]
+                    """
+                    url = "https://server.arcgisonline.com/ArcGIS/rest/services/" \
+                        "Canvas/World_Dark_Gray_Base/MapServer/tile/{Z}/{Y}/{X}.png"
+                    tiles  = gv.WMTS(WMTSTileSource(url=url))
+                    pts    = hv.Points(gv.Dataset(df, kdims=["x", "y"], vdims=[col]))
+                    shade  = datashade(pts, element_type=gv.Image, aggregator=ds.mean(col), cmap=cmap)
+                    spread = dynspread(shade, threshold=T, max_px=PX)
+                    hover  = hv.util.Dynamic(
+                        rasterize(pts, aggregator=ds.mean(col), width=50, height=25, streams=[RangeXY]),
+                        operation=hv.QuadMesh,
+                    ).opts(cmap=cmap)
+                    return (tiles * spread * hover).relabel(title)
+
+                def clip_outliers(df):
+                    return df[
+                        df.x.between(df.x.quantile(0.001), df.x.quantile(0.999)) &
+                        df.y.between(df.y.quantile(0.001), df.y.quantile(0.999))
+                    ]
+
+                def build_revenue_df(geo, orders):
+                    geo3 = geo.set_index("geolocation_zip_code_prefix_3_digits").copy()
+                    gp   = orders.groupby("customer_zip_code_prefix_3_digits")["price"].sum()
+                    df   = geo3.join(gp)
+                    df["revenue"] = df["price"].fillna(0) / 1_000          # k R$
+                    return df
+
+                def build_avg_ticket_df(geo, orders):
+                    tickets = (
+                        orders.groupby("order_id")
+                            .agg({"price": "sum",
+                                    "customer_zip_code_prefix_3_digits": "first"})
+                    )
+                    gp = tickets.groupby("customer_zip_code_prefix_3_digits")["price"].mean()
+                    geo3 = geo.set_index("geolocation_zip_code_prefix_3_digits").copy()
+                    df = geo3.join(gp)
+                    df["avg_ticket"] = df["price"]
+                    return df
+
+                @st.cache_data(show_spinner=True)
+                def build_freight_ratio_df(geo, orders):
+                    tmp = (
+                        orders.groupby("order_id")
+                            .agg({"price": "sum",
+                                    "freight_value": "sum",
+                                    "customer_zip_code_prefix_3_digits": "first"})
+                    )
+
+                    tmp = tmp[tmp["price"] > 0]
+                    tmp["freight_ratio"] = tmp["freight_value"] / tmp["price"]
+
+                    gp = tmp.groupby("customer_zip_code_prefix_3_digits")["freight_ratio"].mean()
+
+                    geo3 = geo.set_index("geolocation_zip_code_prefix_3_digits").copy()
+                    return geo3.join(gp)
+
+                # ───────────────────────────── sidebar selectors ─────────────────────────────
+                st.header("📍 Фильтр карты")
+
+                states = ["<вся Бразилия>"] + sorted(geo["geolocation_state"].unique())
+                state  = st.selectbox("Штат (UF)", states, index=0)
+
+                if state == "<вся Бразилия>":
+                    sub_geo    = geo.copy()
+                    sub_orders = orders.copy()
+                    city       = "<все>"
                 else:
-                    sub_geo    = filter_data(geo, 'geolocation_state', state_choice)
-                    sub_orders = orders[orders['customer_state'] == state_choice]
+                    sub_geo    = geo[geo["geolocation_state"] == state]
+                    sub_orders = orders[orders["customer_state"] == state]
+                    cities     = ["<все>"] + sorted(sub_geo["geolocation_city"].str.lower().unique())
+                    city       = st.selectbox("Город", cities, index=0)
+                    if city != "<все>":
+                        sub_geo    = sub_geo[sub_geo["geolocation_city"].str.lower() == city]
+                        sub_orders = sub_orders[sub_orders["customer_city"].str.lower() == city]
 
-                    cities_in_state = sorted(
-                        sub_geo['geolocation_city'].str.lower().unique()
-                    )
-                    city_choice = st.sidebar.selectbox(
-                        "city (optional)", ['<all>'] + cities_in_state
-                    )
+                sub_geo = clip_outliers(sub_geo)
 
-                    if city_choice != '<all>':
-                        sub_geo = filter_data(sub_geo, 'geolocation_city', city_choice)
-                        sub_orders = sub_orders[
-                            sub_orders['customer_city'].str.lower() == city_choice
-                        ]
+                # ───────────────────────────── revenue map ─────────────────────────────
+                st.subheader("💰 Доход от заказов (тыс. R$)")
 
-                # Построение DataFrame с доходами
                 revenue_df = build_revenue_df(sub_geo, sub_orders)
 
-                # Отображение статистики на боковой панели
-                st.sidebar.markdown("### Общая статистика")
-                st.sidebar.metric("nº zip prefixes", len(revenue_df))
-                st.sidebar.metric("total revenue (k R$)", int(revenue_df['revenue'].sum()))
+                col1, col2 = st.columns(2)
 
-                if st.sidebar.checkbox("Показать `describe()`", value=False):
-                    st.sidebar.dataframe(revenue_df['revenue'].describe().to_frame(), use_container_width=True)
+                with col1:
+                    st.metric("ZIP‑префиксов", len(revenue_df))
+                with col2:
+                    st.metric("Всего (k R$)", int(revenue_df["revenue"].sum()))
 
-                # Отображение карты с индикатором загрузки
-                with st.spinner("Рендеринг datashader tiles"):
-                    fig = hv.render(map_plot(revenue_df), backend='bokeh')
-                streamlit_bokeh(fig, use_container_width=True)
+                with st.spinner("🖼️ рендер дохода …"):
+                    fig_rev = hv.render(make_map(revenue_df, "revenue",
+                                                "Orders Revenue (k R$)", fire),
+                                        backend="bokeh")
+                fig_rev.sizing_mode = "stretch_width"
+                streamlit_bokeh(fig_rev, use_container_width=True)
 
-    # Обработка ошибок при загрузке данных
+                # ───────────────────────────── avg ticket map ─────────────────────────────
+                st.subheader("🎟️ Средний чек заказа (R$)")
+
+                avg_df = build_avg_ticket_df(sub_geo, sub_orders)
+
+                st.metric("Средний чек (R$)", f"{avg_df['avg_ticket'].mean():.2f}")
+
+                with st.spinner("🖼️ рендер среднего чека …"):
+                    fig_avg = hv.render(make_map(avg_df, "avg_ticket",
+                                                "Orders Average Ticket (R$)", bgy),
+                                        backend="bokeh")
+                fig_avg.sizing_mode = "stretch_width"
+                streamlit_bokeh(fig_avg, use_container_width=True)
+
+                # ───────────────────────────── freight‑ratio map ─────────────────────────────
+                freight_df = build_freight_ratio_df(sub_geo, sub_orders)
+
+                st.subheader("🚚 Среднее отношение доставки к цене")
+
+                st.metric("Среднее соотношение доставка/чек", f"{freight_df['freight_ratio'].mean():.2%}")
+
+                with st.spinner("🖼️ рендер freight-ratio map …"):
+                    fig_freight = hv.render(
+                        make_map(freight_df, "freight_ratio",
+                                "Orders Average Freight Ratio", kr),
+                        backend="bokeh"
+                    )
+                fig_freight.sizing_mode = "stretch_width"
+                streamlit_bokeh(fig_freight, use_container_width=True)
+
+            with tab7:
+                import streamlit.components.v1 as components
+
+                PBI_EMBED_URL = "https://app.powerbi.com/reportEmbed?reportId=67889dcb-3cc3-4b1c-9a22-14472a156917&autoAuth=true&ctid=dfe014b9-885d-4e4a-8eb4-597464b165c5"
+
+                components.html(f"""
+                    <iframe 
+                        width="100%" 
+                        height="800" 
+                        src="{PBI_EMBED_URL}" 
+                        frameborder="0" 
+                        allowFullScreen="true">
+                    </iframe>
+                """, height=800)
+
+
     except Exception as e:
         st.error(f"Ошибка при загрузке или обработке данных: {str(e)}")
         st.stop()
 
-# Запуск приложения
 if __name__ == "__main__":
     main()

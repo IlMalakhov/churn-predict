@@ -1,0 +1,7 @@
+[theme]
+# this will switch the default red accent to a nice blue
+primaryColor = "#1c83e1"            
+backgroundColor = "#0f1116"
+secondaryBackgroundColor = "#222327"
+textColor = "#fafafa"
+font = "sans serif"
