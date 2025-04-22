@@ -32,8 +32,10 @@ from sklearn.metrics import (
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
+from sklearn.cluster import KMeans
 import xgboost as xgb
 from scipy import stats
+from scipy.special import boxcox1p
 
 # ==============================================
 # НАСТРОЙКА СТРАНИЦЫ STREAMLIT
@@ -61,14 +63,14 @@ def load_and_preprocess_data() -> tuple[pd.DataFrame, pd.DataFrame]:
             - DataFrame с RFM-метриками для каждого клиента.
     """
     # Загрузка данных из CSV файлов
-    customers = pd.read_csv('customers.csv')
-    orders = pd.read_csv('orders.csv')
-    order_payments = pd.read_csv('order_payments.csv')
-    order_reviews = pd.read_csv('order_reviews.csv')
-    products = pd.read_csv('products.csv')
-    product_category = pd.read_csv('product_category_name_translation.csv')
-    sellers = pd.read_csv('sellers.csv')
-    order_items = pd.read_csv('orders_items.csv')
+    customers = pd.read_csv('data/customers.csv')
+    orders = pd.read_csv('data/orders.csv')
+    order_payments = pd.read_csv('data/order_payments.csv')
+    order_reviews = pd.read_csv('data/order_reviews.csv')
+    products = pd.read_csv('data/products.csv')
+    product_category = pd.read_csv('data/product_category_name_translation.csv')
+    sellers = pd.read_csv('data/sellers.csv')
+    order_items = pd.read_csv('data/orders_items.csv')
 
     for df in [order_payments, order_reviews, product_category, sellers, order_items]:
         if 'Unnamed: 0' in df.columns:
@@ -87,7 +89,7 @@ def load_and_preprocess_data() -> tuple[pd.DataFrame, pd.DataFrame]:
         orders[col] = pd.to_datetime(orders[col], format='%Y-%m-%d %H:%M:%S', errors='coerce')
         invalid_count = orders[col].isnull().sum()
 
-    order_reviews = pd.read_csv('order_reviews.csv')
+    order_reviews = pd.read_csv('data/order_reviews.csv')
     order_reviews['review_creation_date'] = pd.to_datetime(
         order_reviews['review_creation_date'], 
         format='%Y-%m-%d %H:%M:%S',
@@ -321,7 +323,7 @@ def load_and_preprocess_data() -> tuple[pd.DataFrame, pd.DataFrame]:
 
 @st.cache_data(show_spinner="🌎 загружаем geo …")
 def load_geo():
-    geo = pd.read_csv("geolocation.csv", dtype={"geolocation_zip_code_prefix": str})
+    geo = pd.read_csv("data/geolocation.csv", dtype={"geolocation_zip_code_prefix": str})
     for n in range(1, 5):
         geo[f"geolocation_zip_code_prefix_{n}_digits"] = geo["geolocation_zip_code_prefix"].str[:n]
     geo = geo.query(
@@ -334,10 +336,10 @@ def load_geo():
 
 @st.cache_data(show_spinner="📦 загружаем orders …")
 def load_orders():
-    o   = pd.read_csv("orders.csv")
-    it  = pd.read_csv("orders_items.csv")
-    rv  = pd.read_csv("order_reviews.csv")
-    cu  = pd.read_csv("customers.csv", dtype={"customer_zip_code_prefix": str})
+    o   = pd.read_csv("data/orders.csv")
+    it  = pd.read_csv("data/orders_items.csv")
+    rv  = pd.read_csv("data/order_reviews.csv")
+    cu  = pd.read_csv("data/customers.csv", dtype={"customer_zip_code_prefix": str})
     cu["customer_zip_code_prefix_3_digits"] = cu["customer_zip_code_prefix"].str[:3].astype(int)
     return (
         o.merge(it, on="order_id").merge(cu, on="customer_id").merge(rv, on="order_id")
@@ -450,9 +452,45 @@ def main():
     Основная функция, запускающая Streamlit приложение для анализа оттока.
     Включает загрузку данных, фильтрацию, визуализацию и моделирование.
     """
-    st.title("📊 Анализ оттока клиентов")
-    
-    load_data()[2].to_csv('merge6.csv', index=False)
+
+    from pathlib import Path
+    import base64
+
+    logo_path = Path("assets/logo_white_font.png")
+    logo_base64 = base64.b64encode(logo_path.read_bytes()).decode()
+
+    st.markdown(
+    f"""
+    <style>
+        .logo-corner {{
+            position: fixed;
+            right: 1rem;
+            bottom: 1rem;
+            width: 100px;
+            cursor: pointer;
+            opacity: 0.4;
+            z-index: 100;
+            transition: all 0.3s ease;
+            }}
+        
+        .logo-corner:hover {{
+            transform: scale(1.1);
+            opacity: 1;
+        }}
+
+        .logo-corner:active {{
+            transform: scale(0.9);
+            opacity: 0.65;
+            }}
+    </style>
+
+    <img class="logo-corner"
+        src="data:image/png;base64,{logo_base64}">
+    """,
+    unsafe_allow_html=True,
+    )
+
+    st.title("Анализ оттока клиентов")
 
     try:
         df = load_data()[0]
@@ -475,12 +513,12 @@ def main():
 
         if st.sidebar.button("Выбрать все", key="select_all"):
             st.session_state.selected_states = all_states.copy()
+            st.rerun()
 
         # сам multiselect теперь ниже
         selected_states = st.sidebar.multiselect(
             "Выберите штаты:",
             options=all_states,
-            default=st.session_state.selected_states,
             key="selected_states"
         )
         
@@ -508,11 +546,82 @@ def main():
         """,
         unsafe_allow_html=True,
         )
+
+        st.markdown(
+        """
+        <style>
+        /* Target the tab list container to enable flexbox and take full width */
+        div[data-baseweb="tab-list"] {
+            display: flex;
+            width: 100%;
+        }
+
+        /* Target individual tab buttons to make them grow equally and center text */
+        div[data-baseweb="tab-list"] button[role="tab"] {
+            flex-grow: 1;
+            justify-content: center; /* Center the text inside the tab button */
+        }
+
+        /* Target the inner div containing the text for font size */
+        div[data-baseweb="tab-list"] button[role="tab"] > div {
+            font-size: 20px !important; /* Keep existing font size rule */
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+        )
         
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["📈 Обзор", "🌳 Древовидная карта", "📊 Распределения", "🔍 Детали", "🤖 Модели", "🗺️ Карта", "🧑‍💻 Power BI"])
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["Обзор", "Древовидная карта", "Распределения", "Детали", "Модели", "Карта", "Power BI"])
         
         # Вкладка 1: Обзор
         with tab1:
+            st.markdown("""
+            <style>
+            * {
+                scroll-behavior: smooth;
+            }
+            .toc-box {
+                border: 1px solid #FFFFFF;
+                border-radius: 8px;
+                padding: 24px; 
+                margin-top: 24px;
+                margin-bottom: 36px;
+                background-color: #0f1116;
+            }
+            .toc-box h4 {
+                margin-top: 0;
+                margin-bottom: 10px;
+                font-size: 18px;
+            }
+            .toc-box ul {
+                padding-left: 0;
+                margin-bottom: 0;
+            }
+            .toc-box li {
+                margin-bottom: 10px;
+                font-size: 16px;
+            }
+            .toc-box a {
+                text-decoration: none;
+                color: #549ecd;
+                font-weight: 600;
+            }
+            .toc-box a:hover {
+                text-decoration: underline; /* Underline on hover */
+                color: #1c83e1; /* Darker blue on hover */
+            }
+            </style>
+
+            <div class="toc-box">
+                <h4>Содержание</h4>
+                <ul>
+                    <li><a href="#top-churn-states">Топ штатов по оттоку</a></li>
+                    <li><a href="#customer-distribution-by-state">Распределение клиентов по штатам</a></li>
+                    <li><a href="#churn-by-state-and-category">Уровень оттока по штатам и категориям товаров</a></li>
+                </ul>
+            </div>
+            """, unsafe_allow_html=True)
+
             col1, col2, col3 = st.columns(3)
             col1.metric("Всего клиентов", filtered_df['customer_unique_id'].nunique())
             col2.metric("Уровень оттока", 
@@ -520,6 +629,7 @@ def main():
             col3.metric("Средний RFM Score", 
                     f"{filtered_df['RFM_Score'].mean():.1f}")
 
+            st.markdown("<a name='top-churn-states'></a>", unsafe_allow_html=True)
             # График топ регионов по оттоку
             st.subheader("Топ штатов по оттоку")
 
@@ -559,6 +669,7 @@ def main():
             # Отображение графика в Streamlit
             st.plotly_chart(fig, use_container_width=True)
 
+            st.markdown("<a name='customer-distribution-by-state'></a>", unsafe_allow_html=True)
             # Дополнительный график с распределением клиентов по штатам
             st.subheader("Распределение клиентов по штатам")
 
@@ -610,7 +721,7 @@ def main():
             )
 
             fig.update_layout(
-                xaxis_title="Регион",
+                xaxis_title="Штат",
                 yaxis_title="Категория товара",
                 hovermode='closest',
 
@@ -626,6 +737,7 @@ def main():
                 )
             )
 
+            st.markdown("<a name='churn-by-state-and-category'></a>", unsafe_allow_html=True)
             st.subheader("Уровень оттока по штатам и категориям товаров")
             st.plotly_chart(fig, use_container_width=True)
 
@@ -670,13 +782,13 @@ def main():
             ]
 
             fig = px.treemap(fig3, path=['Segment'], values='Count',
-                            width=800, height=400
+                            width=800, height=800,
                             )
 
             fig.update_traces(text=fig3['display_text'],
                             textinfo='text',  
                             textposition='middle center',
-                            textfont_size=14,
+                            textfont_size=18,
                             hovertemplate=(
                     "<b>%{label}</b><br>" +
                     "Количество: %{value:,}<br>" +
@@ -688,6 +800,63 @@ def main():
                 treemapcolorway = colors, 
                 margin=dict(t=50, l=25, r=25, b=25))
 
+            st.plotly_chart(fig, use_container_width=True)
+
+            st.subheader("Дендрограмма клиентских сегментов")
+
+            # нормализация метрик
+            customers_fix = pd.DataFrame()
+            customers_fix["Recency"] = boxcox1p(rfm['Recency'], stats.boxcox_normmax(rfm['MonetaryValue'] + 1))
+            customers_fix["Frequency"] = stats.boxcox(rfm['Frequency'])[0]
+            customers_fix["Frequency"] = rfm['Frequency']
+            customers_fix["MonetaryValue"] = stats.boxcox(rfm['MonetaryValue'])[0]
+
+            scaler = StandardScaler()
+            scaler.fit(customers_fix)
+            customers_normalized = scaler.transform(customers_fix)
+
+            # Создаем модель с 4 кластерами (выбрано по Elbow-методу) и добавляем метку кластера в rfm
+            model = KMeans(n_clusters=4, random_state=42)
+            model.fit(customers_normalized)
+            rfm["Cluster"] = model.labels_
+
+            # Определяем сегмент (Segment) и ценность клиента (Score).
+            rfm['Score'] = 'Стандарт'
+            rfm.loc[rfm['RFM_Score']>5,'Score'] = 'Бронза'
+            rfm.loc[rfm['RFM_Score']>7,'Score'] = 'Серебро'
+            rfm.loc[rfm['RFM_Score']>9,'Score'] = 'Золото'
+            rfm.loc[rfm['RFM_Score']>10,'Score'] = 'Платина'
+
+            # дендрограмма
+            fig5 = rfm.groupby(['Cluster', 'Segment', 'Score']).agg({'customer_unique_id': lambda x: len(x)}).reset_index()
+
+            fig5.rename(columns={'customer_unique_id': 'Count'}, inplace=True)
+            fig5['percent'] = (fig5['Count'] / fig5['Count'].sum()) * 100
+            fig5['percent'] = fig5['percent'].round(1)
+
+            colors = [
+                '#3a6ea5',
+                '#5d8fc7',
+                '#89b0d9',
+                '#b5d0e8',
+                '#d9e6f2',
+                '#e6eef7',
+                '#f2f7fb'
+            ]
+
+            fig = px.treemap(fig5, path=['Cluster', 'Segment', 'Score'], values='Count',
+                            width=800, height=1000,
+                            hover_data={'Segment': True, 'Count': True, 'percent': True})
+
+            fig.update_traces(textinfo='label+text+value+percent root', textfont_size=18)
+            fig.update_layout(margin = dict(t=50, l=25, r=25, b=25))
+
+            fig.update_layout(
+                treemapcolorway = colors,
+                margin = dict(t=50, l=25, r=25, b=25))
+
+            fig.data[0].textinfo = 'label+text+value+percent root'
+            
             st.plotly_chart(fig, use_container_width=True)
 
         # Вкладка 3: Распределения
@@ -916,11 +1085,11 @@ def main():
 
                 gv.opts.defaults(
                     gv.opts.Overlay(
-                        height   = 700,           # какая высота нужна
+                        height   = 700,
                         toolbar  = "above",
                         xaxis    = None,
                         yaxis    = None,
-                        responsive=True           # можно и без, но лишним не будет
+                        responsive=True               # это важно
                     ),
                     gv.opts.QuadMesh(
                         tools      = ["hover"],
