@@ -2,7 +2,7 @@
 
 ## Предварительные требования
 
-Make sure you have the following installed:
+Убедитесь, что установлено следующее:
 
 - Python 3.8+
 - pip
