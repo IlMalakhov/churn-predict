@@ -891,7 +891,7 @@ def main():
             
             col1, col2 = st.columns(2)
             with col1:
-                st.metric("Регион", customer_data['customer_state'])
+                st.metric("Штат", customer_data['customer_state'])
                 st.metric("RFM Score", customer_data['RFM_Score'])
                 st.metric("Сумма покупок", f"{customer_data['payment_value']:.2f}")
             
