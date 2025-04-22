@@ -5,8 +5,6 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
 import plotly.express as px
 
 
@@ -16,17 +14,17 @@ import datashader as ds
 from datashader.utils import lnglat_to_meters as webm
 from holoviews.operation.datashader import datashade, dynspread, rasterize
 from holoviews.streams import RangeXY
-from colorcet import rainbow, fire, bgy, kr
+from colorcet import fire, bgy, kr
 from bokeh.models import WMTSTileSource
 from streamlit_bokeh import streamlit_bokeh
 
 import joblib
-from datetime import datetime, timedelta
+from datetime import timedelta
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.metrics import (
-    classification_report, roc_auc_score, confusion_matrix, 
+    roc_auc_score, confusion_matrix, 
     recall_score, precision_score, f1_score, accuracy_score, roc_curve
 )
 from sklearn.model_selection import train_test_split
@@ -36,6 +34,9 @@ from sklearn.cluster import KMeans
 import xgboost as xgb
 from scipy import stats
 from scipy.special import boxcox1p
+
+from pathlib import Path
+import base64
 
 # ==============================================
 # НАСТРОЙКА СТРАНИЦЫ STREAMLIT
@@ -87,7 +88,6 @@ def load_and_preprocess_data() -> tuple[pd.DataFrame, pd.DataFrame]:
     # Преобразование столбцов с датами в формат datetime
     for col in date_cols:
         orders[col] = pd.to_datetime(orders[col], format='%Y-%m-%d %H:%M:%S', errors='coerce')
-        invalid_count = orders[col].isnull().sum()
 
     order_reviews = pd.read_csv('data/order_reviews.csv')
     order_reviews['review_creation_date'] = pd.to_datetime(
@@ -135,8 +135,6 @@ def load_and_preprocess_data() -> tuple[pd.DataFrame, pd.DataFrame]:
 
     # Определение даты для анализа (последняя дата заказа + 1 день)
     analysis_date = merge1['order_purchase_timestamp'].max() + timedelta(days=1)
-
-    ####################################################################################################################################################
     
     df_sorted = merge1.sort_values(['customer_unique_id', 'order_purchase_timestamp'])
     # группируем по клиенту и вычисляем разницу между заказами
@@ -202,7 +200,7 @@ def load_and_preprocess_data() -> tuple[pd.DataFrame, pd.DataFrame]:
         on='customer_unique_id',
         how='left'
     )
-##########################################################################################################################################################
+
     # Обработка данных о продуктах и категориях
     products = pd.merge(
         products, 
@@ -283,19 +281,29 @@ def load_and_preprocess_data() -> tuple[pd.DataFrame, pd.DataFrame]:
 
     def RScore(x, p, d) -> int:
         """Присваивает R-скор на основе значения Recency и квантилей."""
-        if x <= d[p][0.2]: return 5
-        elif x <= d[p][0.4]: return 4
-        elif x <= d[p][0.6]: return 3
-        elif x <= d[p][0.8]: return 2
-        else: return 1
+        if x <= d[p][0.2]: 
+            return 5
+        elif x <= d[p][0.4]: 
+            return 4
+        elif x <= d[p][0.6]: 
+            return 3
+        elif x <= d[p][0.8]: 
+            return 2
+        else: 
+            return 1
 
     def FMScore(x, p, d) -> int:
         """Присваивает F и M скоры на основе значений Frequency/MonetaryValue и квантилей."""
-        if x <= d[p][0.2]: return 1
-        elif x <= d[p][0.4]: return 2
-        elif x <= d[p][0.6]: return 3
-        elif x <= d[p][0.8]: return 4
-        else: return 5
+        if x <= d[p][0.2]: 
+            return 1
+        elif x <= d[p][0.4]: 
+            return 2
+        elif x <= d[p][0.6]: 
+            return 3
+        elif x <= d[p][0.8]: 
+            return 4
+        else: 
+            return 5
 
     rfm['R'] = rfm['Recency'].apply(RScore, args=('Recency', quantiles))
     rfm['F'] = rfm['Frequency'].apply(FMScore, args=('Frequency', quantiles))
@@ -386,7 +394,7 @@ def extended_classification_report(y_true: np.ndarray, y_pred: np.ndarray, y_pro
     """
     metrics = {
         'specificity': calculate_specificity(y_true, y_pred),
-        'sensitivity': recall_score(y_true, y_pred), # Recall
+        'sensitivity': recall_score(y_true, y_pred),
         'precision': precision_score(y_true, y_pred),
         'f1': f1_score(y_true, y_pred),
         'roc_auc': roc_auc_score(y_true, y_proba),
@@ -413,10 +421,10 @@ def train_model(model, X_train: pd.DataFrame, y_train: pd.Series) -> Pipeline:
         Pipeline: Обученный пайплайн Scikit-learn.
     """
     pipeline = Pipeline([
-        ('preprocessor', preprocessor), # Шаг предобработки
-        ('classifier', model)          # Шаг классификации
+        ('preprocessor', preprocessor),
+        ('classifier', model)
     ])
-    pipeline.fit(X_train, y_train) # Обучение пайплайна
+    pipeline.fit(X_train, y_train)
     return pipeline
 
 def predict_churn(model: Pipeline, X: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
@@ -430,8 +438,8 @@ def predict_churn(model: Pipeline, X: pd.DataFrame) -> tuple[np.ndarray, np.ndar
     Returns:
         tuple[np.ndarray, np.ndarray]: Кортеж из предсказанных меток и вероятностей класса 1.
     """
-    y_pred = model.predict(X) # Предсказание классов
-    y_proba = model.predict_proba(X)[:, 1] # Предсказание вероятностей класса 1
+    y_pred = model.predict(X)
+    y_proba = model.predict_proba(X)[:, 1]
     return y_pred, y_proba
 
 @st.cache_data
@@ -453,9 +461,7 @@ def main():
     Включает загрузку данных, фильтрацию, визуализацию и моделирование.
     """
 
-    from pathlib import Path
-    import base64
-
+    # Логотип в правом нижнем углу
     logo_path = Path("assets/logo_white_font.png")
     logo_base64 = base64.b64encode(logo_path.read_bytes()).decode()
 
@@ -507,7 +513,7 @@ def main():
         
         # получаем все штаты
         all_states = sorted(df['customer_state'].unique())
-        # инициализируем session_state единожды
+        # запускаем session_state
         if 'selected_states' not in st.session_state:
             st.session_state.selected_states = all_states.copy()
 
@@ -515,7 +521,7 @@ def main():
             st.session_state.selected_states = all_states.copy()
             st.rerun()
 
-        # сам multiselect теперь ниже
+        # сам multiselect
         selected_states = st.sidebar.multiselect(
             "Выберите штаты:",
             options=all_states,
@@ -607,8 +613,7 @@ def main():
                 font-weight: 600;
             }
             .toc-box a:hover {
-                text-decoration: underline; /* Underline on hover */
-                color: #1c83e1; /* Darker blue on hover */
+                color: #1c83e1;
             }
             </style>
 
@@ -1080,7 +1085,7 @@ def main():
 
                 T, PX = 0.05, 1
 
-                # ─── HoloViews → Bokeh opts (FULL‑WIDTH, RESPONSIVE) ───────────────────
+                # HoloViews и Bokeh opts
                 hv.extension("bokeh", logo=False)
 
                 gv.opts.defaults(
@@ -1159,7 +1164,7 @@ def main():
                     geo3 = geo.set_index("geolocation_zip_code_prefix_3_digits").copy()
                     return geo3.join(gp)
 
-                # ───────────────────────────── sidebar selectors ─────────────────────────────
+                # sidebar
                 st.header("📍 Фильтр карты")
 
                 states = ["<вся Бразилия>"] + sorted(geo["geolocation_state"].unique())
@@ -1179,8 +1184,9 @@ def main():
                         sub_orders = sub_orders[sub_orders["customer_city"].str.lower() == city]
 
                 sub_geo = clip_outliers(sub_geo)
+                st.markdown("---")
 
-                # ───────────────────────────── revenue map ─────────────────────────────
+                # revenue map
                 st.subheader("💰 Доход от заказов (тыс. R$)")
 
                 revenue_df = build_revenue_df(sub_geo, sub_orders)
@@ -1198,8 +1204,9 @@ def main():
                                         backend="bokeh")
                 fig_rev.sizing_mode = "stretch_width"
                 streamlit_bokeh(fig_rev, use_container_width=True)
+                st.markdown("---")
 
-                # ───────────────────────────── avg ticket map ─────────────────────────────
+                # avg ticket map
                 st.subheader("🎟️ Средний чек заказа (R$)")
 
                 avg_df = build_avg_ticket_df(sub_geo, sub_orders)
@@ -1212,8 +1219,9 @@ def main():
                                         backend="bokeh")
                 fig_avg.sizing_mode = "stretch_width"
                 streamlit_bokeh(fig_avg, use_container_width=True)
+                st.markdown("---")
 
-                # ───────────────────────────── freight‑ratio map ─────────────────────────────
+                # freight‑ratio map
                 freight_df = build_freight_ratio_df(sub_geo, sub_orders)
 
                 st.subheader("🚚 Среднее отношение доставки к цене")
@@ -1229,20 +1237,65 @@ def main():
                 fig_freight.sizing_mode = "stretch_width"
                 streamlit_bokeh(fig_freight, use_container_width=True)
 
+            # Вкладка 7: Power BI
             with tab7:
                 import streamlit.components.v1 as components
 
-                PBI_EMBED_URL = "https://app.powerbi.com/reportEmbed?reportId=67889dcb-3cc3-4b1c-9a22-14472a156917&autoAuth=true&ctid=dfe014b9-885d-4e4a-8eb4-597464b165c5"
+                PBI_EMBED_URL = "https://app.powerbi.com/reportEmbed?reportId=cce0ab93-c249-4a04-8cc5-03e2828f89d6&autoAuth=true&ctid=dfe014b9-885d-4e4a-8eb4-597464b165c5"
 
                 components.html(f"""
                     <iframe 
                         width="100%" 
-                        height="800" 
+                        height="700" 
                         src="{PBI_EMBED_URL}" 
                         frameborder="0" 
                         allowFullScreen="true">
                     </iframe>
-                """, height=800)
+                """, height=700)
+
+                pbix_file_path = Path("EDA_dashboard_le_finale.pbix")
+                pbix_file_name = "EDA_dashboard.pbix"
+
+                if pbix_file_path.is_file():
+                    try:
+                        with open(pbix_file_path, "rb") as pbix_file:
+                            st.download_button(
+                                label="Скачать дашборд (.pbix)",
+                                data=pbix_file,
+                                file_name=pbix_file_name,
+                                mime="application/octet-stream"
+                            )
+                    except Exception as e:
+                        st.error(f"Не удалось прочитать файл дашборда: {e}")
+                else:
+                    st.warning(f"Файл дашборда не найден по пути: {pbix_file_path}")
+
+                st.markdown("---")
+                st.subheader("Галерея изображений")
+
+                image_path1 = Path("assets/dash1.jpg")
+                image_path2 = Path("assets/dash2.jpg")
+
+                image_files = []
+                if image_path1.is_file():
+                    image_files.append(str(image_path1))
+                else:
+                    st.warning(f"Image not found: {image_path1}")
+
+                if image_path2.is_file():
+                    image_files.append(str(image_path2))
+                else:
+                    st.warning(f"Image not found: {image_path2}")
+
+                if image_files:
+                    tab_labels = ["Клиенты", "Продавцы"]
+                    tabs = st.tabs(tab_labels)
+
+                    for i, tab in enumerate(tabs):
+                        with tab:
+                            st.image(image_files[i], use_container_width=True)
+                else:
+                    st.info("Нет изображений для отображения в галерее.")
 
 
     except Exception as e:
