@@ -1,2 +1,7 @@
 .venv
+
+# Linter
 .ruff_cache
+
+# MacOS stuff
+.DS_Store
