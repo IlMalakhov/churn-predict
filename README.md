@@ -1,7 +1,4 @@
 # Streamlit-приложение: Анализ оттока клиентов
-Работает 24/7: [app.elijahmy.tech](https://app.elijahmy.tech)
-
-То же самое на другом хосте: [streamlit.elijahmy.tech](https://streamlit.elijahmy.tech)
 
 ### MiBA для Rostelecom
 
